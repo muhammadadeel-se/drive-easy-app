@@ -1,0 +1,27 @@
+# DriveEasy Rentals - Email Classification Web Application
+
+## Overview
+A Flask web application running locally on port 5000 built for **DriveEasy Rentals**. It utilizes **pandas** to ingest customer service email CSV datasets and HuggingFace's **GPT-2 pipeline** to classify emails into distinct categories with confidence scores, featuring robust fallback heuristics.
+
+---
+
+## User Interface (UI) Description
+The application features a clean Bootstrap dashboard:
+1. **Upload Section (`/`)**: A file input form allowing users to upload their customer email CSV dataset.
+2. **Results Table**: Dynamically displays processed records containing:
+   * **Email ID**: Unique identifier for the rental inquiry.
+   * **Subject**: The customer's email subject line.
+   * **Assigned Category**: Color-coded badge showing the classification (*Reservation Inquiry*, *Cancellation Request*, *Payment Issue*, *Vehicle Damage Report*, or *General Feedback*).
+   * **Confidence Score**: Numerical score indicating model certainty.
+
+---
+
+## Run Instructions
+
+### Prerequisites
+* Python 3.8+ installed.
+
+### Local Execution Steps
+1. **Install Dependencies:**
+   ```bash
+   python -m pip install -r requirements.txt
