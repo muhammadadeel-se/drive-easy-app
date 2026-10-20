@@ -1,95 +1,92 @@
-import json
 import os
 import re
-from flask import Flask, redirect, render_template, request, url_for
+import json
 import pandas as pd
+from flask import Flask, render_template, request, redirect, url_for
 from transformers import pipeline
 
 app = Flask(__name__)
-app.config["UPLOAD_FOLDER"] = "uploads"
-os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+app.config['UPLOAD_FOLDER'] = 'uploads'
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Initialize Hugging Face GPT-2 text generation pipeline
+# Initialize Hugging Face pipeline for GPT-2 text generation
 print("Loading Hugging Face GPT-2 model pipeline...")
-gpt2_pipeline = pipeline("text-generation", model="gpt2", max_new_tokens=60)
+generator = pipeline("text-generation", model="gpt2")
 
+VALID_CATEGORIES = [
+    "Reservation Inquiry",
+    "Cancellation Request",
+    "Payment Issue",
+    "Vehicle Damage Report",
+    "General Feedback"
+]
 
-def classify_email_with_gpt2(subject, body):
-  prompt = (
-      "Classify this DriveEasy Rentals customer service email into one of these"
-      " exact categories:\n- Reservation Inquiry\n- Cancellation"
-      " Request\n- Payment Issue\n- Vehicle Damage Report\n- General"
-      f" Feedback\n\nSubject: {subject}\nBody:"
-      f" {body}\n\nOutput JSON format:\n{{\"category\": \"<Category Name>\","
-      ' "confidence": <float 0.0-1.0>}\nResult:'
-  )
+def classify_email_with_gpt2(email_text):
+    try:
+        # Prompt structure guiding the base model
+        prompt = (
+            f"Classify the following car rental email into one of these categories: "
+            f"{VALID_CATEGORIES}.\n"
+            f"Email: \"{email_text}\"\n"
+            f"Output strictly in JSON format with keys 'category' and 'confidence' (float between 0 and 1).\n"
+            f"JSON:"
+        )
+        
+        # Run text generation
+        response = generator(prompt, max_new_tokens=50, num_return_sequences=1, pad_token_id=50256)
+        raw_output = response[0]['generated_text']
+        
+        # Extract JSON payload using regex
+        json_match = re.search(r'\{.*?\}', raw_output, re.DOTALL)
+        if json_match:
+            data = json.loads(json_match.group(0))
+            category = data.get("category", "Uncertain")
+            confidence = float(data.get("confidence", 0.0))
+            
+            # Apply confidence fallback threshold (< 0.6) or validate category
+            if confidence < 0.6 or category not in VALID_CATEGORIES:
+                return "Uncertain", confidence
+            
+            return category, confidence
+        
+        # Fallback if no valid JSON structure is found in generated text
+        return "Uncertain", 0.0
 
-  try:
-    response = gpt2_pipeline(prompt, num_return_sequences=1)
-    generated_text = response[0]["generated_text"]
-    output_text = generated_text[len(prompt) :].strip()
+    except (json.JSONDecodeError, ValueError, KeyError, Exception):
+        # Robustly catch any parsing, missing key, or type conversion failures without crashing
+        return "Uncertain", 0.0
 
-    match = re.search(r"\{[^}]+\}", output_text)
-    if match:
-      data = json.loads(match.group(0))
-      category = data.get("category", "General Feedback")
-      confidence = float(data.get("confidence", 0.85))
-
-      # 4 & 5. Confidence threshold fallback (< 0.6 -> Uncertain)
-      if confidence < 0.6:
-        return "Uncertain", confidence
-
-      return category, confidence
-
-  except Exception as e:
-    print(f"GPT-2 generation warning: {e}")
-
-  # Fallback heuristic rules with low confidence for ambiguous cases
-  text_lower = (subject + " " + body).lower()
-  if "cancel" in text_lower:
-    return "Cancellation Request", 0.85
-  elif "pay" in text_lower or "card" in text_lower or "charge" in text_lower:
-    return "Payment Issue", 0.85
-  elif "damage" in text_lower or "scratch" in text_lower or "dent" in text_lower:
-    return "Vehicle Damage Report", 0.90
-  elif "reserve" in text_lower or "booking" in text_lower or "car" in text_lower:
-    return "Reservation Inquiry", 0.85
-
-  return "Uncertain", 0.40
-
-
-@app.route("/", methods=["GET", "POST"])
+@app.route('/')
 def index():
-  predictions = []
-  if request.method == "POST":
-    if "file" not in request.files:
-      return redirect(request.url)
-    file = request.files["file"]
-    if file.filename == "":
-      return redirect(request.url)
+    return render_template('index.html')
 
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return redirect(request.url)
+    file = request.files['file']
+    if file.filename == '':
+        return redirect(request.url)
+    
     if file:
-      filepath = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
-      file.save(filepath)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        file.save(filepath)
+        
+        # Read uploaded CSV using pandas
+        df = pd.read_csv(filepath)
+        
+        results = []
+        for index, row in df.iterrows():
+            # Handle different possible column names for email content
+            email_content = row.get('email_text', row.get('email', str(row.values[0])))
+            category, confidence = classify_email_with_gpt2(email_content)
+            results.append({
+                'email': email_content,
+                'category': category,
+                'confidence': confidence
+            })
+            
+        return render_template('index.html', results=results)
 
-      # Read dataset using pandas
-      df = pd.read_csv(filepath)
-
-      # Process rows for the dashboard
-      for _, row in df.head(15).iterrows():
-        subj = str(row.get("subject", ""))
-        body = str(row.get("body", ""))
-
-        category, confidence = classify_email_with_gpt2(subj, body)
-        predictions.append({
-            "email_id": row.get("email_id", "R-1001"),
-            "subject": subj,
-            "category": category,
-            "confidence": f"{confidence:.2f}",
-        })
-
-  return render_template("index.html", predictions=predictions)
-
-
-if __name__ == "__main__":
-  app.run(host="127.0.0.1", port=5000, debug=True)
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
