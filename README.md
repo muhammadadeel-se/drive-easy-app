@@ -9,7 +9,7 @@ A Flask web application running locally on port 5000 built for **DriveEasy Renta
 
 ### 1. Model Evaluation (`evaluate.py`)
 Using `scikit-learn`, the dataset is split into training and test sets (80% train, 20% test). The evaluation script runs classification across the test set and computes metrics:
-* **Overall Accuracy:** ~0.78 (Successfully exceeds the required > 0.50 threshold).
+- **Achieved Accuracy:** 0.75 (tested via scikit-learn train_test_split)
 * **Confusion Matrix:** Tracks performance across categories (*Reservation Inquiry*, *Cancellation Request*, *Payment Issue*, *Vehicle Damage Report*, *General Feedback*).
 
 ### 2. Confidence Threshold Fallback
