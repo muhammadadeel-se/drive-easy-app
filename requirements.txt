@@ -1,4 +1,6 @@
-Flask>=3.0.0
-pandas>=2.0.0
-transformers>=4.0.0
-torch>=2.0.0
+flask
+pandas
+scikit-learn
+transformers
+torch
+gunicorn
