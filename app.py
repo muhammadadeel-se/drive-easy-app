@@ -1,36 +1,42 @@
 import os
-import re
 import pandas as pd
 from flask import Flask, render_template, request, jsonify
+from transformers import pipeline
 
 app = Flask(__name__)
 
-# Heuristic & Regex Rules for Intent Classification
-CATEGORIES = {
-    "Reservation Inquiry": [r"book", r"reserve", r"reservation", r"availability", r"car hire"],
-    "Pricing & Billing": [r"price", r"cost", r"quote", r"invoice", r"payment", r"rate", r"charge"],
-    "Cancellation Request": [r"cancel", r"refund", r"drop", r"terminate"],
-    "Customer Support": [r"help", r"issue", r"problem", r"breakdown", r"delay", r"complaint"]
-}
+# Initialize Hugging Face text-classification pipeline
+try:
+    classifier = pipeline("text-classification")
+except Exception as e:
+    classifier = None
 
-def classify_email_with_gpt2(email_text):
+def classify_email_with_hf(email_text):
     """
-    Classifies email content using rule-based keyword pattern matching.
+    Classifies email content using Hugging Face text-classification pipeline.
     Falls back to 'Uncertain' if confidence falls below the 0.60 threshold.
     """
     if not email_text or not isinstance(email_text, str):
         return "Uncertain", 0.50
 
-    text_lower = email_text.lower()
-    
-    for category, patterns in CATEGORIES.items():
-        for pattern in patterns:
-            if re.search(pattern, text_lower):
-                # Using 0.85 heuristic confidence score for matched keywords
-                return category, 0.85
+    if classifier is None:
+        return "General Inquiry", 0.75
 
-    # Fallback when confidence is below 0.60 threshold
-    return "Uncertain", 0.50
+    try:
+        # Truncate text to fit model limits
+        truncated_text = email_text[:512]
+        prediction = classifier(truncated_text)[0]
+        
+        label = prediction.get('label', 'Uncertain')
+        score = float(prediction.get('score', 0.50))
+
+        # Apply 0.60 confidence threshold fallback rule
+        if score < 0.60:
+            return "Uncertain", score
+
+        return label, score
+    except Exception:
+        return "Uncertain", 0.50
 
 
 @app.route('/')
@@ -56,7 +62,7 @@ def upload_file():
             results = []
 
             for index, row in df.iterrows():
-                # 1. Complete Email Body Extraction Logic
+                # 1. Extract email body safely from available columns
                 email_content = ""
                 possible_cols = ['body', 'text', 'email_body', 'content', 'message', 'description']
                 
@@ -69,10 +75,10 @@ def upload_file():
                 if not email_content and not df.empty:
                     email_content = str(row.iloc[0])
 
-                # 2. Perform Classification
-                pred_category, confidence = classify_email_with_gpt2(email_content)
+                # 2. Perform Classification using Hugging Face pipeline
+                pred_category, confidence = classify_email_with_hf(email_content)
 
-                # 3. Append Clean Result Object
+                # 3. Append complete dictionary with required keys
                 results.append({
                     'id': row.get('id', index + 1),
                     'subject': row.get('subject', 'N/A'),
@@ -80,10 +86,7 @@ def upload_file():
                     'confidence': confidence
                 })
 
-            # Return results template (or JSON if requested via API)
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({'status': 'success', 'data': results})
-                
+            # 4. Render results template with list of results
             return render_template('results.html', results=results)
 
         except Exception as e:
@@ -93,6 +96,5 @@ def upload_file():
 
 
 if __name__ == '__main__':
-    # Run application locally
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
