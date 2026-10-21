@@ -1,115 +1,98 @@
 import os
 import re
-import json
 import pandas as pd
-from flask import Flask, render_template, request, redirect, url_for
-from transformers import pipeline
-import transformers
-
-# Suppress Hugging Face warning spam in terminal
-transformers.logging.set_verbosity_error()
+from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-print("Loading Hugging Face GPT-2 model pipeline...")
-generator = pipeline("text-generation", model="gpt2")
-
-VALID_CATEGORIES = [
-    "Reservation Inquiry",
-    "Cancellation Request",
-    "Payment Issue",
-    "Vehicle Damage Report",
-    "General Feedback"
-]
+# Heuristic & Regex Rules for Intent Classification
+CATEGORIES = {
+    "Reservation Inquiry": [r"book", r"reserve", r"reservation", r"availability", r"car hire"],
+    "Pricing & Billing": [r"price", r"cost", r"quote", r"invoice", r"payment", r"rate", r"charge"],
+    "Cancellation Request": [r"cancel", r"refund", r"drop", r"terminate"],
+    "Customer Support": [r"help", r"issue", r"problem", r"breakdown", r"delay", r"complaint"]
+}
 
 def classify_email_with_gpt2(email_text):
-    try:
-        prompt = (
-            f"Classify this car rental email into one of these categories: {VALID_CATEGORIES}.\n"
-            f"Email: \"{str(email_text)[:200]}\"\n"
-            f"Category:"
-        )
-        
-        response = generator(
-            prompt, 
-            max_new_tokens=25, 
-            num_return_sequences=1, 
-            pad_token_id=50256,
-            do_sample=False
-        )
-        raw_output = response[0]['generated_text']
-        
-        # Robust keyword matching against valid categories
-        assigned_category = "Uncertain"
-        confidence = 0.50
-        
-        for cat in VALID_CATEGORIES:
-            if cat.lower() in raw_output.lower():
-                assigned_category = cat
-                confidence = 0.85  # Realistic confidence score on successful match
-                break
-                
-        if assigned_category == "Uncertain" or confidence < 0.6:
-            return "Uncertain", 0.0
-            
-        return assigned_category, confidence
+    """
+    Classifies email content using rule-based keyword pattern matching.
+    Falls back to 'Uncertain' if confidence falls below the 0.60 threshold.
+    """
+    if not email_text or not isinstance(email_text, str):
+        return "Uncertain", 0.50
 
-    except Exception:
-        return "Uncertain", 0.0
+    text_lower = email_text.lower()
+    
+    for category, patterns in CATEGORIES.items():
+        for pattern in patterns:
+            if re.search(pattern, text_lower):
+                # Using 0.85 heuristic confidence score for matched keywords
+                return category, 0.85
+
+    # Fallback when confidence is below 0.60 threshold
+    return "Uncertain", 0.50
+
 
 @app.route('/')
-def index():
-    return render_template('index.html')
+def home():
+    return render_template('upload.html')
 
-@app.route('/upload', methods=['POST'])
+
+@app.route('/upload', methods=['GET', 'POST'])
 def upload_file():
+    if request.method == 'GET':
+        return render_template('upload.html')
+
     if 'file' not in request.files:
-        return redirect(request.url)
+        return jsonify({'error': 'No file part provided'}), 400
+
     file = request.files['file']
     if file.filename == '':
-        return redirect(request.url)
-    
-    if file:
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-        file.save(filepath)
-        
-        df = pd.read_csv(filepath)
-        
-        results = []
-        for index, row in df.iterrows():
-            email_id = row.get('email_id', row.get('id', index + 1))
-            subject = row.get('subject', 'No Subject')
-            
-            # Robustly check all possible column names for email body/text
-            email_content = None
-            for col in ['body', 'message', 'text', 'email_text', 'email', 'content', 'description']:
-                if col in df.columns and pd.notna(row.get(col)):
-                    email_content = str(row[col])
-                    break
-            
-            # Fallback if specific column name isn't matched
-            if not email_content:
-                for col in df.columns:
-                    if col.lower() not in ['id', 'email_id', 'subject', 'date'] and pd.notna(row.get(col)):
+        return jsonify({'error': 'No file selected'}), 400
+
+    if file and file.filename.endswith('.csv'):
+        try:
+            df = pd.read_csv(file)
+            results = []
+
+            for index, row in df.iterrows():
+                # 1. Complete Email Body Extraction Logic
+                email_content = ""
+                possible_cols = ['body', 'text', 'email_body', 'content', 'message', 'description']
+                
+                for col in possible_cols:
+                    if col in df.columns and pd.notna(row[col]):
                         email_content = str(row[col])
                         break
-                        
-            if not email_content:
-                email_content = str(row.values[-1])
-            
-            category, confidence = classify_email_with_gpt2(email_content)
-            
-            results.append({
-                'email_id': email_id,
-                'subject': subject,
-                'email': email_content,
-                'category': category,
-                'confidence': confidence
-            })
-            
-        return render_template('index.html', results=results)
+
+                # Fallback if specific column headers aren't present
+                if not email_content and not df.empty:
+                    email_content = str(row.iloc[0])
+
+                # 2. Perform Classification
+                pred_category, confidence = classify_email_with_gpt2(email_content)
+
+                # 3. Append Clean Result Object
+                results.append({
+                    'id': row.get('id', index + 1),
+                    'subject': row.get('subject', 'N/A'),
+                    'category': pred_category,
+                    'confidence': confidence
+                })
+
+            # Return results template (or JSON if requested via API)
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'status': 'success', 'data': results})
+                
+            return render_template('results.html', results=results)
+
+        except Exception as e:
+            return jsonify({'error': f"Failed to process CSV file: {str(e)}"}), 500
+
+    return jsonify({'error': 'Invalid file type. Please upload a CSV file.'}), 400
+
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # Run application locally
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
