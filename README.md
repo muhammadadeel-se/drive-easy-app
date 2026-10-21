@@ -1,40 +1,18 @@
-# DriveEasy Rentals - Email Classification Web Application
+# DriveEasy Rentals - Email Triage Assistant
+
+## Live Application
+- **Deployment URL:** [RAILWAY_BUILD_PAUSED_PENDING_RESUME] *(Tested & verified locally at http://127.0.0.1:5000/upload)*
 
 ## Overview
-A Flask web application running locally on port 5000 built for **DriveEasy Rentals**. It utilizes **pandas** to ingest customer service email CSV datasets and HuggingFace's **GPT-2 pipeline** to classify emails into distinct categories with confidence scores, featuring robust fallback heuristics and an evaluation pipeline.
+An automated email classification web application powered by Flask, Hugging Face GPT-2, and scikit-learn to streamline customer inquiry processing for car rental operations.
 
----
+## Evaluation & Performance
+- **Evaluation Script:** `evaluate.py`
+- **Achieved Accuracy:** 0.75
+- **Confidence Threshold:** 0.60 (Predictions below 0.60 are automatically routed to the "Uncertain" category for human review)
 
-## Evaluation & Confidence Fallback
-
-### 1. Model Evaluation (`evaluate.py`)
-Using `scikit-learn`, the dataset is split into training and test sets (80% train, 20% test). The evaluation script runs classification across the test set and computes metrics:
-- **Achieved Accuracy:** 0.75 (tested via scikit-learn train_test_split)
-* **Confusion Matrix:** Tracks performance across categories (*Reservation Inquiry*, *Cancellation Request*, *Payment Issue*, *Vehicle Damage Report*, *General Feedback*).
-
-### 2. Confidence Threshold Fallback
-To ensure reliability when handling ambiguous or low-certainty model outputs:
-* If model confidence falls **below 0.6** (`< 0.6`), or if parsing fails, the system automatically flags the email category as **"Uncertain"** and displays it on the dashboard.
-
----
-
-## User Interface (UI) Description
-The application features a clean Bootstrap dashboard:
-1. **Upload Section (`/`)**: A file input form allowing users to upload their customer email CSV dataset.
-2. **Results Table**: Dynamically displays processed records containing:
-   * **Email ID**: Unique identifier for the rental inquiry.
-   * **Subject**: The customer's email subject line.
-   * **Assigned Category**: Color-coded badge showing the classification (*Uncertain* records are clearly highlighted).
-   * **Confidence Score**: Numerical score indicating model certainty.
-
----
-
-## Run Instructions
-
-### Prerequisites
-* Python 3.8+ installed.
-
-### Local Execution Steps
-1. **Install Dependencies:**
-   ```python
-   python -m pip install -r requirements.txt
+## Local Setup & Quick Start
+1. Clone the repository:
+   ```bash
+   git clone [https://github.com/muhammadadeel-se/drive-easy-app.git](https://github.com/muhammadadeel-se/drive-easy-app.git)
+   cd drive-easy-app
