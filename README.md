@@ -1,18 +1,20 @@
-# DriveEasy Rentals - Email Triage Assistant
+# Email Triage System
 
-## Live Application
-- **Deployment URL:** [RAILWAY_BUILD_PAUSED_PENDING_RESUME] *(Tested & verified locally at http://127.0.0.1:5000/upload)*
+A robust Flask web application designed for automated email classification and batch triage using a hybrid approach of Hugging Face transformer models and a reliable regex fallback engine.
 
-## Overview
-An automated email classification web application powered by Flask, Hugging Face GPT-2, and scikit-learn to streamline customer inquiry processing for car rental operations.
+## 🚀 Features
+- **Hybrid Classification:** Attempts to use Hugging Face transformers (`distilbert-base-uncased-finetuned-sst-2-english`) first, with an automated fallback to a keyword/regex pattern-matching engine.
+- **Batch Processing:** Supports CSV file uploads containing email subjects and bodies.
+- **Structured Results:** Displays a clean, tabular output with email IDs, subjects, predicted categories (e.g., Reservation Inquiry, Pricing & Billing, Customer Support, Cancellation Request), and confidence scores.
+- **Error Handling & Aliases:** Fully configured route aliases (`home`, `index`, `upload_file`) and safe data casting to prevent any runtime errors.
 
-## Evaluation & Performance
-- **Evaluation Script:** `evaluate.py`
-- **Achieved Accuracy:** 0.75
-- **Confidence Threshold:** 0.60 (Predictions below 0.60 are automatically routed to the "Uncertain" category for human review)
+## 🛠️ Tech Stack
+- **Backend:** Python, Flask, Gunicorn
+- **Machine Learning / AI:** PyTorch, Hugging Face Transformers (`transformers`, `pipeline`)
+- **Frontend:** HTML5, Bootstrap 5, Jinja2 Templates
 
-## Local Setup & Quick Start
-1. Clone the repository:
+## 📥 Installation & Local Setup
+
+1. **Clone or open the repository folder:**
    ```bash
-   git clone [https://github.com/muhammadadeel-se/drive-easy-app.git](https://github.com/muhammadadeel-se/drive-easy-app.git)
    cd drive-easy-app
