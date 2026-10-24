@@ -1,90 +1,101 @@
 import os
-import csv
-import io
 import re
+import pandas as pd
 from flask import Flask, render_template, request, redirect, url_for
+from transformers import pipeline
 
 app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'uploads'
+# Ensure uploads directory exists
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Initialize Hugging Face pipeline safely with fallback
-try:
-    from transformers import pipeline
-    classifier = pipeline("text-classification", model="distilbert-base-uncased-finetuned-sst-2-english")
-except Exception as e:
-    classifier = None
-    print(f"Warning: HF pipeline could not be loaded: {e}")
+# 1. Initialize the Hugging Face DistilBERT model
+print("Loading Hugging Face model...")
+classifier = pipeline("text-classification", model="distilbert-base-uncased-finetuned-sst-2-english")
 
-def classify_email_with_hf(text):
-    """
-    Try HF model first; if model not loaded or returns unknown label,
-    fall back to simple regex engine.
-    """
+# 2. Reliable Regex Fallback Engine
+def regex_fallback(text):
+    text = str(text).lower()
+    if re.search(r'\b(reserve|booking|rent|car|available)\b', text):
+        return "Reservation Inquiry"
+    elif re.search(r'\b(cancel|refund|change|modify)\b', text):
+        return "Cancellation / Modification"
+    elif re.search(r'\b(price|cost|quote|how much)\b', text):
+        return "Pricing Inquiry"
+    elif re.search(r'\b(issue|problem|broken|accident|complain)\b', text):
+        return "Customer Support / Issue"
+    else:
+        return "General Inquiry"
+
+# 3. Hybrid Classification Logic
+def classify_email(text):
     try:
-        if classifier is None:
-            raise ValueError("Classifier not loaded")
-        result = classifier(text[:512])
-        label = result[0]["label"]
-        score = float(result[0]["score"])
+        # Pass first 512 characters to DistilBERT
+        result = classifier(text[:512])[0]
         
-        if label in ("POSITIVE", "NEGATIVE"):
-            raise ValueError("Sentiment label not useful")
-        return label, score
-    except Exception:
-        # ---- Regex & Keyword Pattern-Matching Engine ----
-        patterns = {
-            "Reservation Inquiry": r"\b(reserve|booking|schedule|rent|car)\b",
-            "Pricing & Billing": r"\b(price|cost|billing|invoice|rate|fee)\b",
-            "Cancellation Request": r"\b(cancel|termination|stop|refund)\b",
-            "Customer Support": r"\b(help|support|issue|problem|assist)\b",
-        }
-        for cat, pat in patterns.items():
-            if re.search(pat, text, re.I):
-                return cat, 0.85
-        return "Uncertain", 0.55
+        # If the model detects a strongly negative sentiment, flag as Urgent/Complaint
+        if result['label'] == 'NEGATIVE' and result['score'] > 0.7:
+            return "Urgent / Complaint"
+        else:
+            # Otherwise, use the regex engine to determine business category
+            return regex_fallback(text)
+    except Exception as e:
+        # Fallback to regex in case of any model error
+        return regex_fallback(text)
 
-# Multi-route aliases to prevent any BuildError ('home', 'index', 'upload_file')
-@app.route("/", methods=["GET"], endpoint="home")
-@app.route("/index", methods=["GET"], endpoint="index")
-@app.route("/upload", methods=["GET", "POST"], endpoint="upload_file")
+# 4. Routing Architecture
+@app.route('/')
+def index():
+    # Redirect root URL directly to the upload page
+    return redirect(url_for('upload_file'))
+
+@app.route('/upload', methods=['GET', 'POST'])
 def upload_file():
-    if request.method == "POST":
-        if "file" not in request.files:
-            return redirect(request.url)
-        file = request.files["file"]
-        if file.filename == "":
-            return redirect(request.url)
+    if request.method == 'POST':
+        # Check if the post request has the file part
+        if 'file' not in request.files:
+            return "Error: No file part in the request", 400
         
-        if file:
-            stream = io.TextIOWrapper(file.stream, encoding="UTF8")
-            reader = csv.DictReader(stream)
+        file = request.files['file']
+        if file.filename == '':
+            return "Error: No file selected for uploading", 400
             
-            results = []
-            for row in reader:
-                email_content = None
-                for col in ["body", "content", "email_body", "message"]:
-                    if col in row and row[col]:
-                        email_content = row[col]
+        if file and file.filename.endswith('.csv'):
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+            file.save(filepath)
+            
+            try:
+                # Process the CSV file for Batch Triage
+                df = pd.read_csv(filepath)
+                
+                # Find the column containing email text (adjust 'Body' or 'Email' based on your CSV structure)
+                text_column = None
+                for col in ['Body', 'body', 'Email', 'email', 'Text', 'text']:
+                    if col in df.columns:
+                        text_column = col
                         break
-                if not email_content:
-                    email_content = row.get("subject", "")
                 
-                category, confidence = classify_email_with_hf(email_content)
+                if not text_column:
+                    text_column = df.columns[0] # Fallback to the first column if no standard name is found
+
+                # Apply classification
+                df['Predicted Category'] = df[text_column].apply(classify_email)
                 
-                try:
-                    conf_float = float(confidence)
-                except (ValueError, TypeError):
-                    conf_float = 0.55
+                # Convert results to dictionary for the HTML template
+                results = df.to_dict(orient='records')
+                return render_template('results.html', results=results)
+                
+            except Exception as e:
+                return f"Error processing file: {str(e)}", 500
+                
+    # Render upload form for GET requests
+    return render_template('upload.html')
 
-                results.append({
-                    "id": row.get("id", "N/A"),
-                    "subject": row.get("subject", "N/A"),
-                    "category": category,
-                    "confidence": conf_float  # Pass as clean float number
-                })
-            
-            return render_template("results.html", results=results)
-            
-    return render_template("upload.html")
-
-if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port=5000)
+# 5. Production Server Configuration (Railway)
+if __name__ == '__main__':
+    # Railway dynamically assigns a PORT environment variable.
+    # We use os.getenv to fetch it, defaulting to 5000 for local testing.
+    port = int(os.getenv("PORT", 5000))
+    
+    # debug=False is REQUIRED for production to prevent exposing stack traces
+    app.run(host='0.0.0.0', port=port, debug=False)
