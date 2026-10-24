@@ -19,12 +19,13 @@ A robust Flask web application designed for automated email classification and b
    ```bash
    cd drive-easy-app
 ## 🌐 Live Demo & Deployment Instructions
+## 🌐 Live Demo & Deployment
 
-- **Live Demo URL:** `https://device-vocally-accompany.ngrok-free.dev`
-*(Note: This is a temporary live tunnel URL generated via ngrok for mentor verification purposes).*
+- **Live Demo URL:** `https://drive-easy-app-production.up.railway.app`
 
-### 🛠️ How to Deploy Locally with ngrok (Temporary Tunnel)
-If you need to expose the local server for evaluation, follow these steps:
-1. Ensure the Flask app is running locally on port 5000:
-   ```bash
-   python app.py
+### 🚀 How to Deploy to Railway (Production)
+This application is fully configured for permanent cloud hosting on Railway.
+1. Log in to [Railway.app](https://railway.app/) and click **New Project** > **Deploy from GitHub repo**.
+2. Select your repository. Railway will automatically detect the `requirements.txt` and install dependencies.
+3. The included `Procfile` (`web: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2`) will automatically configure the Gunicorn WSGI server.
+4. Go to **Settings** > **Networking** in your Railway project and click **Generate Domain** to get your live public URL.
