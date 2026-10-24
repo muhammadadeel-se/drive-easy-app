@@ -1,11 +1,21 @@
-# DriveEasy Rentals - Project Handover & Deployment Guide
+# DriveEasy Rentals - Email Triage Assistant
 
-## 1. Local Execution Instructions
-1. **Clone the Repository:**
+## Overview
+An automated email classification web application powered by Flask, a Hugging Face transformer model (`distilbert-base-uncased-finetuned-sst-2-english`), and a reliable regex fallback engine to streamline customer inquiry processing for car rental operations.
+
+## Live Application
+- **Live Demo URL:** `https://device-vocally-accompany.ngrok-free.dev`
+*(Note: This is a temporary live tunnel URL generated via ngrok for mentor verification purposes).*
+
+## Deployment Instructions
+
+### Prerequisites
+- Python 3.10+
+- `ngrok` installed on your local machine
+
+### 🛠️ How to Deploy Locally with ngrok (Temporary Tunnel)
+Since free-tier cloud platforms currently restrict deployments behind payment gateways or strict quotas, this project uses ngrok for live evaluation. Follow these steps:
+
+1. Ensure the Flask app is running locally on port 5000:
    ```bash
-   git clone [https://github.com/muhammadadeel-se/drive-easy-app.git](https://github.com/muhammadadeel-se/drive-easy-app.git)
-   cd drive-easy-app
-   ## 4. Known Limitations
-- **Hardcoded Heuristic Confidence Score:** In `app.py`, successful regex pattern matches currently assign a fixed heuristic confidence score (`0.85`) for demonstration purposes, rather than extracting true softmax probabilities directly from GPT-2 model logits.
-- **CPU Inference Latency:** Running local LLM inference on multi-row CSV files on standard CPU instances may take a few seconds per batch.
-- **Free-Tier Deployment Constraints:** Free-tier cloud instances (Railway/Render) may experience cold starts, request limits, or temporary platform-wide deployment pauses.
+   python app.py
