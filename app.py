@@ -39,7 +39,7 @@ def classify_email(text):
         else:
             # Otherwise, use the regex engine to determine business category
             return regex_fallback(text)
-    except Exception as e:
+   except Exception as e:
         # Fallback to regex in case of any model error
         return regex_fallback(text)
 
