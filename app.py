@@ -39,7 +39,7 @@ def classify_email(text):
         else:
             # Otherwise, use the regex engine to determine business category
             return regex_fallback(text)
-   except Exception as e:
+    except Exception as e:
         # Fallback to regex in case of any model error
         return regex_fallback(text)
 
@@ -68,7 +68,7 @@ def upload_file():
                 # Process the CSV file for Batch Triage
                 df = pd.read_csv(filepath)
                 
-                # Find the column containing email text (adjust 'Body' or 'Email' based on your CSV structure)
+                # Find the column containing email text
                 text_column = None
                 for col in ['Body', 'body', 'Email', 'email', 'Text', 'text']:
                     if col in df.columns:
@@ -76,7 +76,7 @@ def upload_file():
                         break
                 
                 if not text_column:
-                    text_column = df.columns[0] # Fallback to the first column if no standard name is found
+                    text_column = df.columns[0] # Fallback to the first column
 
                 # Apply classification
                 df['Predicted Category'] = df[text_column].apply(classify_email)
@@ -94,8 +94,7 @@ def upload_file():
 # 5. Production Server Configuration (Railway)
 if __name__ == '__main__':
     # Railway dynamically assigns a PORT environment variable.
-    # We use os.getenv to fetch it, defaulting to 5000 for local testing.
     port = int(os.getenv("PORT", 5000))
     
-    # debug=False is REQUIRED for production to prevent exposing stack traces
+    # debug=False is REQUIRED for production
     app.run(host='0.0.0.0', port=port, debug=False)
