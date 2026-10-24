@@ -18,3 +18,13 @@ A robust Flask web application designed for automated email classification and b
 1. **Clone or open the repository folder:**
    ```bash
    cd drive-easy-app
+## 🌐 Live Demo & Deployment Instructions
+
+- **Live Demo URL:** `https://device-vocally-accompany.ngrok-free.dev`
+*(Note: This is a temporary live tunnel URL generated via ngrok for mentor verification purposes).*
+
+### 🛠️ How to Deploy Locally with ngrok (Temporary Tunnel)
+If you need to expose the local server for evaluation, follow these steps:
+1. Ensure the Flask app is running locally on port 5000:
+   ```bash
+   python app.py
